@@ -33,20 +33,12 @@ application.add_handler(CommandHandler("start", start))
 @app.post(f"/webhook/{TOKEN}")
 def webhook():
     data = request.get_json(force=True)
-
+    print("Update received:", data)  # check logs
     if data:
         update = Update.de_json(data, application.bot)
-
-        # event loop fix for Flask
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        loop.create_task(application.process_update(update))
-
+        asyncio.run(application.process_update(update))
     return "ok", 200
+
 
 @app.get("/")
 def home():
