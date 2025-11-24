@@ -32,12 +32,23 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
 
 # ------------------ WEBHOOK ENDPOINT ------------------
-
 @app.post(f"/webhook/{TOKEN}")
 def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.create_task(application.process_update(update))
-    return "ok"
+    data = request.get_json(force=True)
+    if data:
+        update = Update.de_json(data, application.bot)
+
+        # Ensure the event loop exists
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Run PTB asynchronously inside Flask
+        loop.create_task(application.process_update(update))
+
+    return "ok", 200
 
 
 @app.get("/")
