@@ -1,72 +1,67 @@
 import os
+import asyncio
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, ContextTypes
 
+# -------------------------------------------------------
+# Load bot token
+# -------------------------------------------------------
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
-if TOKEN is None:
-    raise RuntimeError("BOT_TOKEN is not set!")
-if WEBHOOK_URL is None:
-    raise RuntimeError("WEBHOOK_URL is not set!")
 
 app = Flask(__name__)
 
-# Build bot with PTB 21.x (no Updater anymore)
-application = Application.builder().token(TOKEN).updater(None).build()
+# -------------------------------------------------------
+# Create PTB Application
+# -------------------------------------------------------
+application = Application.builder().token(TOKEN).build()
 
-
-# ------------------ BOT COMMANDS ------------------
-
+# -------------------------------------------------------
+# Start command
+# -------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Bot is online 🔥 Stuur iets!")
+    await update.message.reply_text(
+        "Welkom bij de Referral4Referral bot!\n\nStuur je referral link om mee te doen."
+    )
 
-
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"Je stuurde: {update.message.text}")
-
-
+# Add handler
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-
-# ------------------ WEBHOOK ENDPOINT ------------------
+# -------------------------------------------------------
+# Webhook Endpoint
+# -------------------------------------------------------
 @app.post(f"/webhook/{TOKEN}")
 def webhook():
     data = request.get_json(force=True)
+
     if data:
         update = Update.de_json(data, application.bot)
 
-        # Ensure the event loop exists
+        # event loop fix for Flask
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        # Run PTB asynchronously inside Flask
         loop.create_task(application.process_update(update))
 
     return "ok", 200
-
 
 @app.get("/")
 def home():
     return "Bot running!"
 
-
-# ------------------ STARTUP ------------------
-
+# -------------------------------------------------------
+# Start Flask + set webhook on startup
+# -------------------------------------------------------
 if __name__ == "__main__":
-    import asyncio
+    WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
 
-    async def setup():
-        await application.initialize()
-        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook/{TOKEN}")
-        await application.start()
-        print("Webhook ingesteld:", f"{WEBHOOK_URL}/webhook/{TOKEN}")
+    # Set webhook synchronously before Flask starts
+    import requests
+    requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}")
 
-    asyncio.run(setup())
+    print(f"Webhook ingesteld: {WEBHOOK_URL}")
 
     app.run(host="0.0.0.0", port=10000)
