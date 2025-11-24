@@ -1,50 +1,51 @@
-from flask import Flask, request
 import os
+from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Bijvoorbeeld: https://jouw-service.onrender.com
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # <-- verplicht in environment
 
 app = Flask(__name__)
 
-# --- Telegram application ---
+# --- Telegram bot setup ---
 application = Application.builder().token(TOKEN).build()
 
-# /start command
+# Start command
 async def start(update: Update, context):
     await update.message.reply_text(
-        "Welkom bij de Referral4Referral bot! 🎉\n\n"
+        "Welkom bij de Referral4Referral bot!\n\n"
         "Stuur je referral link om mee te doen."
     )
 
-# Alle andere berichten
-async def echo(update: Update, context):
-    await update.message.reply_text(f"Je stuurde: {update.message.text}")
+# Default echo handler
+async def handle_message(update: Update, context):
+    text = update.message.text
+    await update.message.reply_text(f"Je hebt gestuurd: {text}")
 
-# Handlers registreren
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-# --- Flask webhook route ---
-@app.route(f"/{TOKEN}", methods=["POST"])
+# --- Flask webhook endpoint ---
+@app.post(f"/webhook/{TOKEN}")
 def webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    application.create_task(application.process_update(update))
+    application.create_update(update)
     return "ok"
 
-
-@app.route("/")
+# --- Home route ---
+@app.get("/")
 def home():
     return "Bot draait!"
 
-
 if __name__ == "__main__":
-    # Start webhook
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=10000,
-        url_path=TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
-    )
+    # Webhook instellen bij Telegram
+    import asyncio
+
+    async def set_webhook():
+        await application.bot.delete_webhook()
+        await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TOKEN}")
+
+    asyncio.run(set_webhook())
+    app.run(host="0.0.0.0", port=10000)
