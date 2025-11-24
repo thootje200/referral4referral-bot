@@ -1,51 +1,61 @@
 import os
 from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # <-- verplicht in environment
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
+if TOKEN is None:
+    raise RuntimeError("BOT_TOKEN is not set!")
+if WEBHOOK_URL is None:
+    raise RuntimeError("WEBHOOK_URL is not set!")
 
 app = Flask(__name__)
 
-# --- Telegram bot setup ---
-application = Application.builder().token(TOKEN).build()
+# Build bot with PTB 21.x (no Updater anymore)
+application = Application.builder().token(TOKEN).updater(None).build()
 
-# Start command
-async def start(update: Update, context):
-    await update.message.reply_text(
-        "Welkom bij de Referral4Referral bot!\n\n"
-        "Stuur je referral link om mee te doen."
-    )
 
-# Default echo handler
-async def handle_message(update: Update, context):
-    text = update.message.text
-    await update.message.reply_text(f"Je hebt gestuurd: {text}")
+# ------------------ BOT COMMANDS ------------------
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is online 🔥 Stuur iets!")
+
+
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"Je stuurde: {update.message.text}")
+
 
 application.add_handler(CommandHandler("start", start))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
-# --- Flask webhook endpoint ---
+
+# ------------------ WEBHOOK ENDPOINT ------------------
+
 @app.post(f"/webhook/{TOKEN}")
 def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, application.bot)
-    application.create_update(update)
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.create_task(application.process_update(update))
     return "ok"
 
-# --- Home route ---
+
 @app.get("/")
 def home():
-    return "Bot draait!"
+    return "Bot running!"
+
+
+# ------------------ STARTUP ------------------
 
 if __name__ == "__main__":
-    # Webhook instellen bij Telegram
     import asyncio
 
-    async def set_webhook():
-        await application.bot.delete_webhook()
-        await application.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook/{TOKEN}")
+    async def setup():
+        await application.initialize()
+        await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook/{TOKEN}")
+        await application.start()
+        print("Webhook ingesteld:", f"{WEBHOOK_URL}/webhook/{TOKEN}")
 
-    asyncio.run(set_webhook())
+    asyncio.run(setup())
+
     app.run(host="0.0.0.0", port=10000)
