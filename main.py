@@ -56,4 +56,7 @@ if __name__ == "__main__":
 
     print(f"Webhook ingesteld: {WEBHOOK_URL}")
 
+    # Belangrijk! Initialiseer de Telegram Application expliciet
+    asyncio.run(application.initialize())
+
     app.run(host="0.0.0.0", port=10000)
