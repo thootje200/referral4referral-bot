@@ -26,6 +26,7 @@ queue_manager = QueueManager(db)
 # Maak de Telegram Application
 application = Application.builder().token(TOKEN).build()
 
+
 def is_valid_link(text: str) -> bool:
     """Validate if text contains a valid URL"""
     url_pattern = r"https?://[^\s]+"
@@ -195,58 +196,20 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, referral_handler))
 
-# ---- Maak één permanente event loop in een achtergrondthread ----
-loop = asyncio.new_event_loop()
-
-def _start_loop():
-    asyncio.set_event_loop(loop)
-    loop.run_forever()
-
-loop_thread = threading.Thread(target=_start_loop, daemon=True)
-loop_thread.start()
-
-# Initialiseer de Telegram Application op die loop
-init_future = asyncio.run_coroutine_threadsafe(application.initialize(), loop)
-# Optioneel wachten totdat initialize klaar is (handig bij startup)
-try:
-    init_future.result(timeout=15)
-except Exception as e:
-    # Als initialize faalt: log en ga door (Flask blijft draaien)
-    print("Fout bij initialisatie van Application:", repr(e))
-
-# Webhook endpoint: schedule het verwerken van de update op de achtergrondloop
 @app.post(f"/webhook/{TOKEN}")
-def webhook():
-    data = request.get_json(force=True)
-    print("Update received:", data)
+async def webhook():
+    data = await request.get_json()
     if data:
         update = Update.de_json(data, application.bot)
-        # Plan de verwerking op de background loop (niet blokkeren)
-        try:
-            asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
-        except Exception as e:
-            print("Fout bij schedule process_update:", repr(e))
+        # Plan verwerking in de huidige loop
+        asyncio.create_task(application.process_update(update))
     return "ok", 200
+
 
 @app.get("/")
 def home():
     return "Bot running!"
 
-# Netjes afsluiten bij exit
-def _shutdown():
-    try:
-        # Eerst de Application netjes afsluiten
-        fut = asyncio.run_coroutine_threadsafe(application.shutdown(), loop)
-        try:
-            fut.result(timeout=15)
-        except Exception as e:
-            print("Fout bij application.shutdown:", repr(e))
-    finally:
-        # Stop de loop en join thread
-        loop.call_soon_threadsafe(loop.stop)
-        loop_thread.join(timeout=5)
-
-atexit.register(_shutdown)
 
 if __name__ == "__main__":
     WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
