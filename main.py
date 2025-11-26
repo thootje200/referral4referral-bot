@@ -202,7 +202,7 @@ async def webhook():
     update = Update.de_json(data, application.bot)
 
     # PTB async update verwerken
-    await application.process_update(update)
+    application.process_update(update)
 
     return "OK"
 
