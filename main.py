@@ -25,7 +25,7 @@ queue_manager = QueueManager(db)
 
 # Maak de Telegram Application
 application = Application.builder().token(TOKEN).build()
-
+application.initialize()
 
 def is_valid_link(text: str) -> bool:
     """Validate if text contains a valid URL"""
