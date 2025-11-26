@@ -16,6 +16,21 @@ from telegram.ext import (
 from database import Database, UserStatus
 from queue_manager import QueueManager
 
+CHANNEL_USERNAME = "@ref4refupdates"  # kanaal waar je lid van moet zijn
+
+def check_membership(update: Update, context: CallbackContext) -> bool:
+    user_id = update.effective_user.id
+    try:
+        member = context.bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        if member.status in ["member", "administrator", "creator"]:
+            return True
+        else:
+            return False
+    except:
+        return False
+# --- Einde force join check ---
+
+
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))  # Set in environment
 app = Flask(__name__)
