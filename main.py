@@ -198,12 +198,14 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, referral
 
 @app.post(f"/webhook/{TOKEN}")
 async def webhook():
-    data = await request.get_json()
-    if data:
-        update = Update.de_json(data, application.bot)
-        # Plan verwerking in de huidige loop
-        asyncio.create_task(application.process_update(update))
-    return "ok", 200
+    data = request.get_json()  # <-- GEEN await
+    update = Update.de_json(data, application.bot)
+
+    # PTB async update verwerken
+    await application.process_update(update)
+
+    return "OK"
+
 
 
 @app.get("/")
