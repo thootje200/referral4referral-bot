@@ -25,7 +25,6 @@ queue_manager = QueueManager(db)
 
 # Maak de Telegram Application
 application = Application.builder().token(TOKEN).build()
-application.initialize()
 
 def is_valid_link(text: str) -> bool:
     """Validate if text contains a valid URL"""
@@ -197,15 +196,14 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, referral_handler))
 
 @app.post(f"/webhook/{TOKEN}")
-async def webhook():
-    data = request.get_json()  # <-- GEEN await
+def webhook():
+    data = request.get_json()
     update = Update.de_json(data, application.bot)
 
-    # PTB async update verwerken
-    application.process_update(update)
+    # Verwerk async update in de achtergrond
+    application.create_task(application.process_update(update))
 
     return "OK"
-
 
 
 @app.get("/")
