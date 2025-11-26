@@ -136,16 +136,19 @@ class QueueManager:
         if not target_id:
             return False, None, None
 
-        # Prevent assigning the same person again (A → B → A fix)
-        if user.assigned_to == target_id:
-            current_pos = self.queue.index(user_id)
+        current_pos = self.queue.index(user_id)
+        next_pos = current_pos + 1
 
-        # Check if there's a user two positions ahead
-        if current_pos + 2 < len(self.queue):
-            target_id = self.queue[current_pos + 2]
-        else:
-            # No safe target available
-            return False, None, None
+        while next_pos < len(self.queue):
+            candidate_id = self.queue[next_pos]
+            if not self.db.has_interacted_before(user_id, candidate_id):
+                target_id = candidate_id
+                break
+            next_pos += 1
+         else:
+             # Geen veilige kandidaat gevonden
+             return False, None, None
+
 
         target_user = self.db.get_user(target_id)
         if not target_user:
