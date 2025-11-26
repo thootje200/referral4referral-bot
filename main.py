@@ -11,6 +11,7 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
+    CallbackContext
 )
 from database import Database, UserStatus
 from queue_manager import QueueManager
