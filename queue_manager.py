@@ -191,16 +191,16 @@ if target_id:
     self.db.add_referral_history(user_id, target_id)
 
 
-        # Move user back to WAITING status
-        self.db.update_user_status(user_id, UserStatus.WAITING.value, assigned_to=None)
+    # Move user back to WAITING status
+    self.db.update_user_status(user_id, UserStatus.WAITING.value, assigned_to=None)
 
-        # Move them to the back of the queue
-        if user_id in self.queue:
-            self.queue.remove(user_id)
+    # Move them to the back of the queue
+    if user_id in self.queue:
+        self.queue.remove(user_id)
         self.queue.append(user_id)
         self._save_queue_to_db()
 
-        return True, "Referral completed! You've been added back to the queue."
+    return True, "Referral completed! You've been added back to the queue."
 
     def get_queue_list(self, limit: Optional[int] = None) -> List[str]:
         """
