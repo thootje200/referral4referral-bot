@@ -201,14 +201,6 @@ application.add_handler(CommandHandler("info", info))
 # Handler voor gewone tekst (referral links)
 async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle referral link submission"""
-    # Check kanaal-lidmaatschap
-    if not await check_membership(update, context):
-        await update.message.reply_text(
-            "🚫 Je moet eerst lid zijn van ons kanaal voordat je referrals kunt ontvangen.\n\n"
-            "➡️ Word lid: https://t.me/ref4refupdates\n\n"
-            "Klik daarna opnieuw op je referral-actie."
-        )
-        return
     user_id = update.effective_user.id
     link = update.message.text
     # Check channel membership
