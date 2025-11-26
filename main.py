@@ -211,7 +211,18 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = update.effective_user.id
     link = update.message.text
-    
+    # Check channel membership
+    if not await check_membership(update, context):
+    # Remove from queue if they are still in it
+        if queue_manager.get_queue_position(user_id) is not None:
+            queue_manager.remove_user_from_queue(user_id)
+
+        await update.message.reply_text(
+            "🚫 You are no longer a member of our channel.\n"
+            "➡️ Join here: https://t.me/ref4refupdates\n\n"
+            "After joining, please send your referral link again."
+    )
+        return
     # Validate link
     if not is_valid_link(link):
         await update.message.reply_text(
