@@ -30,6 +30,13 @@ application = Application.builder().token(TOKEN).build()
 loop = asyncio.new_event_loop()
 threading.Thread(target=loop.run_forever, daemon=True).start()
 
+async def start_bot():
+    await application.initialize()
+    await application.start()
+    print("BOT STARTED")
+
+asyncio.run_coroutine_threadsafe(start_bot(), loop)
+
 def is_valid_link(text: str) -> bool:
     """Validate if text contains a valid URL"""
     url_pattern = r"https?://[^\s]+"
