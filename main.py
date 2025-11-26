@@ -18,10 +18,10 @@ from queue_manager import QueueManager
 
 CHANNEL_USERNAME = "@ref4refupdates"  # kanaal waar je lid van moet zijn
 
-def check_membership(update: Update, context: CallbackContext) -> bool:
+async def check_membership(update: Update, context: CallbackContext) -> bool:
     user_id = update.effective_user.id
     try:
-        member = context.bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        member = await context.bot.get_chat_member(CHANNEL_USERNAME, user_id)
         if member.status in ["member", "administrator", "creator"]:
             return True
         else:
@@ -58,9 +58,16 @@ def is_valid_link(text: str) -> bool:
     url_pattern = r"https?://[^\s]+"
     return bool(re.search(url_pattern, text))
 
-# /start handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command - welcome and instructions"""
+    user_id = update.effective_user.id
+
+    if not await check_membership(update, context):
+        await update.message.reply_text(
+            f"❌ You must join our channel {CHANNEL_USERNAME} first!\n"
+            f"Join here: https://t.me/{CHANNEL_USERNAME.strip('@')}"
+        )
+        return
+
     welcome_message = (
         "🎉 Welcome to Referral4Referral Bot!\n\n"
         "Here's how it works:\n"
