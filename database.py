@@ -329,3 +329,13 @@ class Database:
 
         conn.commit()
         conn.close()
+    def has_interacted_before(self, user_id: int, target_id: int) -> bool:
+        """
+        Check if user_id has previously interacted with target_id
+        Returns True if they have already been paired, False otherwise
+        """
+        result = self.cursor.execute(
+            "SELECT 1 FROM referral_history WHERE user_id = ? AND target_id = ?",
+            (user_id, target_id)
+        ).fetchone()
+        return result is not None
