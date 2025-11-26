@@ -188,7 +188,7 @@ class QueueManager:
 
         # Save referral pair to history (prevents future rematches)
         if target_id:
-        self.db.add_referral_history(user_id, target_id)
+            self.db.add_referral_history(user_id, target_id)
 
 
         # Move user back to WAITING status
