@@ -334,8 +334,15 @@ class Database:
         Check if user_id has previously interacted with target_id
         Returns True if they have already been paired, False otherwise
         """
-        result = self.cursor.execute(
-            "SELECT 1 FROM referral_history WHERE user_id = ? AND target_id = ?",
-            (user_id, target_id)
-        ).fetchone()
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT 1 FROM referral_history 
+            WHERE referrer_id = ? AND referee_id = ?
+        """, (user_id, target_id))
+        result = cursor.fetchone()
+        conn.close()
+
         return result is not None
+
