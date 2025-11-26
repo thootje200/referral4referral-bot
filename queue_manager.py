@@ -145,9 +145,9 @@ class QueueManager:
                 target_id = candidate_id
                 break
             next_pos += 1
-         else:
-             # Geen veilige kandidaat gevonden
-             return False, None, None
+        else:
+            # Geen veilige kandidaat gevonden
+            return False, None, None
 
 
         target_user = self.db.get_user(target_id)
