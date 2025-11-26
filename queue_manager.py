@@ -120,37 +120,47 @@ class QueueManager:
         return None
 
     def assign_referral(self, user_id: int) -> Tuple[bool, Optional[str], Optional[int]]:
-        """
-        Assign a referral to a user (move to ASSIGNED status)
-        
-        Args:
-            user_id: User to assign referral to
-            
-        Returns:
-            Tuple[bool, Optional[str], Optional[int]]: (success, referral_link, target_user_id)
-        """
-        user = self.db.get_user(user_id)
-        if not user:
+    """
+    Assign a referral to a user (move to ASSIGNED status)
+    """
+
+    user = self.db.get_user(user_id)
+    if not user:
+        return False, None, None
+
+    if user.status != UserStatus.WAITING.value:
+        return False, None, None
+
+    # Find the target user (next in queue after this user)
+    target_id = self.get_referral_target(user_id)
+
+    if not target_id:
+        return False, None, None
+
+    # Prevent assigning the same person again (A → B → A fix)
+    if user.assigned_to == target_id:
+        current_pos = self.queue.index(user_id)
+
+        # Check if there's a user two positions ahead
+        if current_pos + 2 < len(self.queue):
+            target_id = self.queue[current_pos + 2]
+        else:
+            # No safe target available
             return False, None, None
 
-        if user.status != UserStatus.WAITING.value:
-            return False, None, None
+    target_user = self.db.get_user(target_id)
+    if not target_user:
+        return False, None, None
 
-        # Find the target user (next in queue after this user)
-        target_id = self.get_referral_target(user_id)
-        
-        if not target_id:
-            # No one after this user yet, they wait
-            return False, None, None
+    # Update user to ASSIGNED status with target link
+    self.db.update_user_status(
+        user_id,
+        UserStatus.ASSIGNED.value,
+        assigned_to=target_id
+    )
 
-        target_user = self.db.get_user(target_id)
-        if not target_user:
-            return False, None, None
+    return True, target_user.referral_link, target_id
 
-        # Update user to ASSIGNED status with target link
-        self.db.update_user_status(user_id, UserStatus.ASSIGNED.value, assigned_to=target_id)
-
-        return True, target_user.referral_link, target_id
 
     def mark_referral_completed(self, user_id: int) -> Tuple[bool, str]:
         """
@@ -173,10 +183,13 @@ class QueueManager:
         # Get the target user they referred
         target_id = user.assigned_to
 
-        # Mark referral as completed
-        self.db.increment_completed_referrals(user_id)
-        if target_id:
-            self.db.add_referral_history(user_id, target_id)
+       # Mark referral as completed
+self.db.increment_completed_referrals(user_id)
+
+# Save referral pair to history (prevents future rematches)
+if target_id:
+    self.db.add_referral_history(user_id, target_id)
+
 
         # Move user back to WAITING status
         self.db.update_user_status(user_id, UserStatus.WAITING.value, assigned_to=None)
