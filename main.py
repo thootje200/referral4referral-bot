@@ -26,6 +26,10 @@ queue_manager = QueueManager(db)
 # Maak de Telegram Application
 application = Application.builder().token(TOKEN).build()
 
+# Start een achtergrond event loop voor async PTB updates
+loop = asyncio.new_event_loop()
+threading.Thread(target=loop.run_forever, daemon=True).start()
+
 def is_valid_link(text: str) -> bool:
     """Validate if text contains a valid URL"""
     url_pattern = r"https?://[^\s]+"
@@ -200,8 +204,8 @@ def webhook():
     data = request.get_json()
     update = Update.de_json(data, application.bot)
 
-    # Verwerk async update in de achtergrond
-    application.create_task(application.process_update(update))
+    # Plan het async update in de background loop
+    asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
 
     return "OK"
 
