@@ -3,6 +3,7 @@ import threading
 import atexit
 import asyncio
 import re
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from flask import Flask, request
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
@@ -11,10 +12,47 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    CallbackContext
+    CallbackContext,
+    CallbackQueryHandler
 )
 from database import Database, UserStatus
 from queue_manager import QueueManager
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+# --- Functie: Foutmelding - gebruiker is nog niet in de groep ---
+def get_not_member_buttons():
+    keyboard = [
+        [InlineKeyboardButton("Join Channel ➡️", url="https://t.me/ref4refupdates")],
+        [InlineKeyboardButton("Refresh 🔄", callback_data="refresh_membership")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# --- Functie: Welkomstbericht /start ---
+def get_welcome_buttons():
+    keyboard = [
+        [InlineKeyboardButton("Send Referral Link 📤", callback_data="send_link")],
+        [InlineKeyboardButton("Help ❓", callback_data="help")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# --- Functie: Queue toegevoegd / referral link geaccepteerd ---
+def get_queue_buttons():
+    keyboard = [
+        [InlineKeyboardButton("Cancel ❌", callback_data="cancel_queue")],
+        [InlineKeyboardButton("Switch 🔄", callback_data="switch_link")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# --- Functie: Help pagina knoppen ---
+def get_help_buttons():
+    keyboard = [
+        [InlineKeyboardButton("Send Referral Link 📤", callback_data="send_link")],
+        [InlineKeyboardButton("My Info ℹ️", callback_data="my_info")],
+        [InlineKeyboardButton("Back 🔙", callback_data="back")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 
 CHANNEL_USERNAME = "@ref4refupdates"  # channel users must join
 
@@ -83,11 +121,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "1️⃣ Send your referral link\n"
         "2️⃣ You'll be placed in a queue\n"
         "3️⃣ When it's your turn, you'll receive another user's referral link\n"
-        "4️⃣ Complete the referral and send /done\n"
+        "4️⃣ Complete the referral and click '✅ Done'\n"
         "5️⃣ You'll earn credit and rejoin the queue\n\n"
         "📤 Send your referral link now to get started!"
     )
-    await update.message.reply_text(welcome_message, reply_markup=MAIN_KEYBOARD)
+    await update.message.reply_text(welcome_message, reply_markup=get_welcome_buttons())
 
 application.add_handler(CommandHandler("start", start))
 
@@ -229,9 +267,11 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(info_text, reply_markup=MAIN_KEYBOARD)
         else:
             await update.message.reply_text(
-                "❌ You're not in the queue. Send /start to get started.",
-                reply_markup=MAIN_KEYBOARD
-            )
+                "🚫 You are no longer a member of our channel.\n"
+                "After joining, please send your referral link again.",
+                reply_markup=get_not_member_buttons() 
+)
+
         return
 
     if text == "Done Referral ✅":
@@ -251,7 +291,8 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📋 Queue Status: check the current queue\n"
             "❓ Help: short explanation"
         )
-        await update.message.reply_text(help_text, reply_markup=MAIN_KEYBOARD)
+        await update.message.reply_text(help_text, reply_markup=get_help_buttons())  # regel 307
+
         return
 
     link = text
@@ -276,7 +317,8 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     success, message = queue_manager.add_user_to_queue(user_id, link)
-    await update.message.reply_text(message, reply_markup=MAIN_KEYBOARD)
+    await update.message.reply_text(message, reply_markup=get_queue_buttons()) 
+
     
     if success:
         next_user_id, next_link = queue_manager.get_next_assignment()
@@ -290,6 +332,39 @@ async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"Error sending referral to {next_user_id}: {e}")
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, referral_handler))
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # acknowledge the callback
+
+    if query.data == "refresh_membership":
+        await start(update, context)
+    elif query.data == "send_link":
+        await query.message.reply_text("Send your referral link now.", reply_markup=MAIN_KEYBOARD)
+    elif query.data == "help":
+        help_text = (
+            "Use the buttons to quickly access actions:\n"
+            "📤 Send Referral Link: submit your link and join the queue\n"
+            "ℹ️ My Info: view your status and credits\n"
+            "✅ Done Referral: confirm a completed referral\n"
+            "📋 Queue Status: check the current queue\n"
+            "❓ Help: short explanation"
+        )
+        await query.message.reply_text(help_text, reply_markup=get_help_buttons())
+    elif query.data == "cancel_queue":
+        user_id = query.from_user.id
+        queue_manager.remove_user_from_queue(user_id)
+        await query.message.reply_text("You have been removed from the queue.", reply_markup=MAIN_KEYBOARD)
+    elif query.data == "switch_link":
+        await query.message.reply_text("Send your new referral link.", reply_markup=MAIN_KEYBOARD)
+    elif query.data == "my_info":
+        user_id = query.from_user.id
+        info_text = queue_manager.get_user_info(user_id)
+        await query.message.reply_text(info_text or "❌ You're not in the queue.", reply_markup=MAIN_KEYBOARD)
+    elif query.data == "back":
+        await query.message.reply_text("Back to main menu.", reply_markup=MAIN_KEYBOARD)
+
+application.add_handler(CallbackQueryHandler(button_callback))  # regel 404
 
 @app.post(f"/webhook/{TOKEN}")
 def webhook():
