@@ -4,7 +4,7 @@ import atexit
 import asyncio
 import re
 from flask import Flask, request
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -16,7 +16,7 @@ from telegram.ext import (
 from database import Database, UserStatus
 from queue_manager import QueueManager
 
-CHANNEL_USERNAME = "@ref4refupdates"  # kanaal waar je lid van moet zijn
+CHANNEL_USERNAME = "@ref4refupdates"  # channel users must join
 
 async def check_membership(update: Update, context: CallbackContext) -> bool:
     user_id = update.effective_user.id
@@ -28,7 +28,7 @@ async def check_membership(update: Update, context: CallbackContext) -> bool:
             return False
     except:
         return False
-# --- Einde force join check ---
+# --- End force join check ---
 
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -39,10 +39,19 @@ app = Flask(__name__)
 db = Database("referral_bot.db")
 queue_manager = QueueManager(db)
 
-# Maak de Telegram Application
+# Create the Telegram Application
 application = Application.builder().token(TOKEN).build()
 
-# Start een achtergrond event loop voor async PTB updates
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["Send Referral Link 📤", "My Info ℹ️"],
+        ["Done Referral ✅", "Queue Status 📋"],
+        ["Help ❓"],
+    ],
+    resize_keyboard=True
+)
+
+# Start a background event loop for async PTB updates
 loop = asyncio.new_event_loop()
 threading.Thread(target=loop.run_forever, daemon=True).start()
 
@@ -78,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5️⃣ You'll earn credit and rejoin the queue\n\n"
         "📤 Send your referral link now to get started!"
     )
-    await update.message.reply_text(welcome_message)
+    await update.message.reply_text(welcome_message, reply_markup=MAIN_KEYBOARD)
 
 application.add_handler(CommandHandler("start", start))
 
@@ -198,36 +207,78 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(CommandHandler("info", info))
 
-# Handler voor gewone tekst (referral links)
+# Handler for plain text (referral links)
 async def referral_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle referral link submission"""
     user_id = update.effective_user.id
-    link = update.message.text
-    # Check channel membership
+    text = (update.message.text or "").strip()
+
+    if not text:
+        return
+
+    if text == "Send Referral Link 📤":
+        await update.message.reply_text(
+            "Send your referral link so we can add you to the queue.",
+            reply_markup=MAIN_KEYBOARD
+        )
+        return
+
+    if text == "My Info ℹ️":
+        info_text = queue_manager.get_user_info(user_id)
+        if info_text:
+            await update.message.reply_text(info_text, reply_markup=MAIN_KEYBOARD)
+        else:
+            await update.message.reply_text(
+                "❌ You're not in the queue. Send /start to get started.",
+                reply_markup=MAIN_KEYBOARD
+            )
+        return
+
+    if text == "Done Referral ✅":
+        await done(update, context)
+        return
+
+    if text == "Queue Status 📋":
+        await update.message.reply_text(queue_manager.get_queue_status(), reply_markup=MAIN_KEYBOARD)
+        return
+
+    if text == "Help ❓":
+        help_text = (
+            "Use the buttons to quickly access actions:\n"
+            "📤 Send Referral Link: submit your link and join the queue\n"
+            "ℹ️ My Info: view your status and credits\n"
+            "✅ Done Referral: confirm a completed referral\n"
+            "📋 Queue Status: check the current queue\n"
+            "❓ Help: short explanation"
+        )
+        await update.message.reply_text(help_text, reply_markup=MAIN_KEYBOARD)
+        return
+
+    link = text
+
     if not await check_membership(update, context):
-    # Remove from queue if they are still in it
         if queue_manager.get_queue_position(user_id) is not None:
             queue_manager.remove_user_from_queue(user_id)
 
         await update.message.reply_text(
             "🚫 You are no longer a member of our channel.\n"
             "➡️ Join here: https://t.me/ref4refupdates\n\n"
-            "After joining, please send your referral link again."
-    )
+            "After joining, please send your referral link again.",
+            reply_markup=MAIN_KEYBOARD
+        )
         return
-    # Validate link
+
     if not is_valid_link(link):
         await update.message.reply_text(
-            "❌ Invalid link format. Please send a valid URL starting with http:// or https://"
+            "❌ Invalid link format. Please send a valid URL starting with http:// or https://",
+            reply_markup=MAIN_KEYBOARD
         )
         return
     
-    # Add user to queue
     success, message = queue_manager.add_user_to_queue(user_id, link)
-    await update.message.reply_text(message)
+    await update.message.reply_text(message, reply_markup=MAIN_KEYBOARD)
     
     if success:
-        # Try to assign referral to the newly added user
         next_user_id, next_link = queue_manager.get_next_assignment()
         if next_user_id:
             try:
@@ -245,7 +296,7 @@ def webhook():
     data = request.get_json()
     update = Update.de_json(data, application.bot)
 
-    # Plan het async update in de background loop
+    # Schedule the async update in the background loop
     asyncio.run_coroutine_threadsafe(application.process_update(update), loop)
 
     return "OK"
@@ -259,11 +310,11 @@ def home():
 if __name__ == "__main__":
     WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
 
-    # Zet webhook bij Telegram
+    # Set webhook with Telegram
     import requests
     resp = requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}")
     print("SetWebhook response:", resp.status_code, resp.text)
-    print(f"Webhook ingesteld: {WEBHOOK_URL}")
+    print(f"Webhook configured: {WEBHOOK_URL}")
 
     # Start Flask (ontwikkelserver). Render draait dit script als process.
     app.run(host="0.0.0.0", port=10000)
