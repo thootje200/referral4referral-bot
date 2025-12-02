@@ -89,6 +89,15 @@ class Database:
             )
         """)
 
+        # Create persistent queue table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS queue (
+                user_id INTEGER PRIMARY KEY,
+                referral_link TEXT NOT NULL,
+                timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
         conn.close()
 
@@ -346,3 +355,36 @@ class Database:
 
         return result is not None
 
+    def queue_add(self, user_id: int, link: str):
+        with self._connect() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO queue (user_id, referral_link)
+                VALUES (?, ?)
+            """, (user_id, link))
+
+
+    def queue_pop_first(self):
+        with self._connect() as conn:
+            row = conn.execute("""
+                SELECT user_id, referral_link FROM queue
+                ORDER BY timestamp ASC
+                LIMIT 1
+            """).fetchone()
+
+            if not row:
+                return None, None
+
+            user_id, link = row
+
+            conn.execute("DELETE FROM queue WHERE user_id = ?", (user_id,))
+            return user_id, link
+
+
+    def queue_get_all(self):
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT user_id, referral_link
+                FROM queue
+                ORDER BY timestamp ASC
+            """).fetchall()
+            return rows
