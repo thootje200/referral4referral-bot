@@ -21,23 +21,8 @@ class QueueManager:
             db: Database instance
         """
         self.db = db
-        self._load_queue_from_db()
+        pass  # nothing to load, DB handles queue
 
-    def _load_queue_from_db(self):
-        """Load queue state from database or reconstruct from user statuses"""
-        saved_queue = self.db.get_queue_state()
-        
-        if saved_queue:
-            # Verify saved queue is still valid
-            self.queue = [uid for uid in saved_queue if self.db.user_exists(uid)]
-        else:
-            # Reconstruct queue from database
-            waiting_users = self.db.get_users_by_status(UserStatus.WAITING.value)
-            self.queue = [user.user_id for user in waiting_users]
-
-    def _save_queue_to_db(self):
-        """Persist queue state to database"""
-        self.db.save_queue_state(self.queue)
 
     def add_user_to_queue(self, user_id: int, referral_link: str) -> Tuple[bool, str]:
         """
@@ -63,106 +48,89 @@ class QueueManager:
             return False, "Failed to add user. Please try again."
 
         # Add to queue
-        self.queue.append(user_id)
-        self._save_queue_to_db()
+        self.db.queue_add(user_id, referral_link)
 
         return True, "Your referral link has been added! You are in the queue."
 
     def get_queue_position(self, user_id: int) -> Optional[int]:
-        """
-        Get a user's position in the queue (1-indexed)
-        
-        Args:
-            user_id: Telegram user ID
-            
-        Returns:
-            Position in queue (1-indexed), or None if not in queue
-        """
+        queue = self.db.queue_get_all()
+        queue_ids = [uid for uid, _ in queue]
         try:
-            return self.queue.index(user_id) + 1
+            return queue_ids.index(user_id) + 1
         except ValueError:
             return None
 
+
     def get_next_user_to_assign(self) -> Optional[int]:
-        """
-        Get the next user who should receive a referral
-        (First user in WAITING status)
-        
-        Returns:
-            User ID of next user, or None if queue is empty
-        """
-        for user_id in self.queue:
+        queue = self.db.queue_get_all()
+
+        for user_id, link in queue:
             user = self.db.get_user(user_id)
             if user and user.status == UserStatus.WAITING.value:
                 return user_id
+
         return None
 
     def get_referral_target(self, user_id: int) -> Optional[int]:
-        """
-        Get the user ID of the next person who will provide a referral to the given user
-        (Next user in ASSIGNED status, or first user if none assigned)
-        
-        Args:
-            user_id: User requesting their target
-            
-        Returns:
-            User ID to refer, or None if not found
-        """
-        # Find this user's position
-        position = self.get_queue_position(user_id)
-        if position is None:
+        queue = self.db.queue_get_all()
+        queue_ids = [uid for uid, _ in queue]
+    
+        if user_id not in queue_ids:
             return None
 
-        # Get the next user's ID
-        if position < len(self.queue):
-            return self.queue[position]  # position + 1 in 1-indexed, but index needs 0-indexed
+        pos = queue_ids.index(user_id)
+
+        if pos + 1 < len(queue_ids):
+            return queue_ids[pos + 1]
 
         return None
 
+
     def assign_referral(self, user_id: int) -> Tuple[bool, Optional[str], Optional[int]]:
-        """
-        Assign a referral to a user (move to ASSIGNED status)
-        """
-        user = self.db.get_user(user_id)
-        if not user:
-            return False, None, None
+    """
+    Assign a referral to a user (move to ASSIGNED status)
+    """
+    user = self.db.get_user(user_id)
+    if not user:
+        return False, None, None
 
-        if user.status != UserStatus.WAITING.value:
-            return False, None, None
+    if user.status != UserStatus.WAITING.value:
+        return False, None, None
 
-        # Find the target user (next in queue after this user)
-        target_id = self.get_referral_target(user_id)
+    # Haal volledige queue op uit de database
+    queue = self.db.queue_get_all()
+    queue_ids = [uid for uid, _ in queue]
 
-        if not target_id:
-            return False, None, None
+    # User moet in de queue staan
+    if user_id not in queue_ids:
+        return False, None, None
 
-        current_pos = self.queue.index(user_id)
-        next_pos = current_pos + 1
+    current_pos = queue_ids.index(user_id)
 
-        while next_pos < len(self.queue):
-            candidate_id = self.queue[next_pos]
-            if not self.db.has_interacted_before(user_id, candidate_id):
-                target_id = candidate_id
-                break
-            next_pos += 1
-        else:
-            # Geen veilige kandidaat gevonden
-            return False, None, None
+    # Zoek de volgende veilige referral target
+    target_id = None
+    for next_pos in range(current_pos + 1, len(queue_ids)):
+        candidate_id = queue_ids[next_pos]
+        # Skip mensen die eerder met elkaar matchten
+        if not self.db.has_interacted_before(user_id, candidate_id):
+            target_id = candidate_id
+            break
 
+    if not target_id:
+        return False, None, None
 
-        target_user = self.db.get_user(target_id)
-        if not target_user:
-            return False, None, None
+    target_user = self.db.get_user(target_id)
+    if not target_user:
+        return False, None, None
 
-        # Update user to ASSIGNED status with target link
-        self.db.update_user_status(
-            user_id,
-            UserStatus.ASSIGNED.value,
-            assigned_to=target_id
-        )
+    # Update user status to ASSIGNED
+    self.db.update_user_status(
+        user_id,
+        UserStatus.ASSIGNED.value,
+        assigned_to=target_id
+    )
 
-        return True, target_user.referral_link, target_id
-
+    return True, target_user.referral_link, target_id
 
 
     def mark_referral_completed(self, user_id: int) -> Tuple[bool, str]:
