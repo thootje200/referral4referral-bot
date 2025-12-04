@@ -388,3 +388,8 @@ class Database:
                 ORDER BY timestamp ASC
             """).fetchall()
             return rows
+            
+    def queue_delete(self, user_id: int):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM queue WHERE user_id = ?", (user_id,))
+            conn.commit()
