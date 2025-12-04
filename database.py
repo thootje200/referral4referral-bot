@@ -390,6 +390,6 @@ class Database:
             return rows
             
     def queue_delete(self, user_id: int):
-        with self._get_connect() as conn:
+        with self._get_connection() as conn:
             conn.execute("DELETE FROM queue WHERE user_id = ?", (user_id,))
             conn.commit()
