@@ -87,9 +87,9 @@ class QueueManager:
 
 
     def assign_referral(self, user_id: int) -> Tuple[bool, Optional[str], Optional[int]]:
-    """
-    Assign a referral to a user (move to ASSIGNED status)
-    """
+        """
+        Assign a referral to a user (move to ASSIGNED status)
+        """
     user = self.db.get_user(user_id)
     if not user:
         return False, None, None
@@ -165,11 +165,10 @@ class QueueManager:
         # Move user back to WAITING status
         self.db.update_user_status(user_id, UserStatus.WAITING.value, assigned_to=None)
 
-        # Move them to the back of the queue
-        if user_id in self.queue:
-            self.queue.remove(user_id)
-            self.queue.append(user_id)
-            self._save_queue_to_db()
+        # Move user to the back of the queue (DB-based)
+        self.db.queue_remove(user_id)
+        self.db.queue_add(user_id, user.referral_link)
+
 
         return True, "Referral completed! You've been added back to the queue."
 
@@ -185,7 +184,9 @@ class QueueManager:
         """
         queue_list = []
         
-        for i, user_id in enumerate(self.queue[:limit], 1):
+        queue = [uid for uid, _ in self.db.queue_get_all()]
+        for i, user_id in enumerate(queue[:limit], 1):
+
             user = self.db.get_user(user_id)
             if user:
                 status_emoji = {
@@ -203,7 +204,8 @@ class QueueManager:
 
     def get_full_queue_list(self) -> str:
         """Get full queue as formatted string"""
-        if not self.queue:
+        queue = self.db.queue_get_all()
+        if not queue:
             return "Queue is empty."
 
         queue_list = self.get_queue_list()
@@ -219,12 +221,13 @@ class QueueManager:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        if user_id not in self.queue:
+        queue_ids = [uid for uid, _ in self.db.queue_get_all()]
+        if user_id not in queue_ids:
             return False, "User not in queue."
 
-        self.queue.remove(user_id)
+        self.db.queue_remove(user_id)
         self.db.remove_user(user_id)
-        self._save_queue_to_db()
+
 
         return True, f"User {user_id} has been removed from the queue."
 
@@ -277,10 +280,18 @@ class QueueManager:
         return None, None
 
     def get_queue_status(self) -> str:
-        """Get readable queue status"""
-        total = len(self.queue)
-        waiting = sum(1 for uid in self.queue if self.db.get_user(uid) and self.db.get_user(uid).status == UserStatus.WAITING.value)
-        assigned = sum(1 for uid in self.queue if self.db.get_user(uid) and self.db.get_user(uid).status == UserStatus.ASSIGNED.value)
+        """Get readable queue status"""        
+        queue_ids = [uid for uid, _ in self.db.queue_get_all()]
+        
+        total = len(queue_ids)
+        waiting = sum(
+            1 for uid in queue_ids
+            if self.db.get_user(uid) and self.db.get_user(uid).status == UserStatus.WAITING.value
+        )
+        assigned = sum(
+            1 for uid in queue_ids
+            if self.db.get_user(uid) and self.db.get_user(uid).status == UserStatus.ASSIGNED.value
+        )
 
         return (
             f"📈 Queue Status\n"
