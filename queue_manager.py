@@ -212,22 +212,12 @@ class QueueManager:
         return "\n".join(queue_list)
 
     def remove_user_from_queue(self, user_id: int) -> Tuple[bool, str]:
-        """
-        Remove a user from the queue entirely
-        
-        Args:
-            user_id: User to remove
-            
-        Returns:
-            Tuple[bool, str]: (success, message)
-        """
         queue_ids = [uid for uid, _ in self.db.queue_get_all()]
         if user_id not in queue_ids:
             return False, "User not in queue."
 
-        self.db.queue_delete(user_id)
+        self.db.queue_delete(user_id)  # ← correct
         self.db.remove_user(user_id)
-
 
         return True, f"User {user_id} has been removed from the queue."
 
