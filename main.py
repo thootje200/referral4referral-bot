@@ -380,16 +380,3 @@ def webhook():
 @app.get("/")
 def home():
     return "Bot running!"
-
-
-if __name__ == "__main__":
-    WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
-
-    # Set webhook with Telegram
-    import requests
-    resp = requests.get(f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={WEBHOOK_URL}")
-    print("SetWebhook response:", resp.status_code, resp.text)
-    print(f"Webhook configured: {WEBHOOK_URL}")
-
-    # Start Flask (ontwikkelserver). Render draait dit script als process.
-    app.run(host="0.0.0.0", port=10000)
