@@ -90,47 +90,47 @@ class QueueManager:
         """
         Assign a referral to a user (move to ASSIGNED status)
         """
-    user = self.db.get_user(user_id)
-    if not user:
-        return False, None, None
+        user = self.db.get_user(user_id)
+        if not user:
+            return False, None, None
 
-    if user.status != UserStatus.WAITING.value:
-        return False, None, None
+        if user.status != UserStatus.WAITING.value:
+            return False, None, None
 
-    # Haal volledige queue op uit de database
-    queue = self.db.queue_get_all()
-    queue_ids = [uid for uid, _ in queue]
+        # Haal volledige queue op uit de database
+        queue = self.db.queue_get_all()
+        queue_ids = [uid for uid, _ in queue]
 
-    # User moet in de queue staan
-    if user_id not in queue_ids:
-        return False, None, None
+        # User moet in de queue staan
+        if user_id not in queue_ids:
+            return False, None, None
 
-    current_pos = queue_ids.index(user_id)
+        current_pos = queue_ids.index(user_id)
 
-    # Zoek de volgende veilige referral target
-    target_id = None
-    for next_pos in range(current_pos + 1, len(queue_ids)):
-        candidate_id = queue_ids[next_pos]
-        # Skip mensen die eerder met elkaar matchten
-        if not self.db.has_interacted_before(user_id, candidate_id):
-            target_id = candidate_id
-            break
+        # Zoek de volgende veilige referral target
+        target_id = None
+        for next_pos in range(current_pos + 1, len(queue_ids)):
+            candidate_id = queue_ids[next_pos]
+            # Skip mensen die eerder met elkaar matchten
+            if not self.db.has_interacted_before(user_id, candidate_id):
+                target_id = candidate_id
+                break
 
-    if not target_id:
-        return False, None, None
+        if not target_id:
+            return False, None, None
 
-    target_user = self.db.get_user(target_id)
-    if not target_user:
-        return False, None, None
+        target_user = self.db.get_user(target_id)
+        if not target_user:
+            return False, None, None
 
-    # Update user status to ASSIGNED
-    self.db.update_user_status(
-        user_id,
-        UserStatus.ASSIGNED.value,
-        assigned_to=target_id
-    )
+        # Update user status to ASSIGNED
+        self.db.update_user_status(
+            user_id,
+            UserStatus.ASSIGNED.value,
+            assigned_to=target_id
+        )
 
-    return True, target_user.referral_link, target_id
+        return True, target_user.referral_link, target_id
 
 
     def mark_referral_completed(self, user_id: int) -> Tuple[bool, str]:
