@@ -166,7 +166,7 @@ class QueueManager:
         self.db.update_user_status(user_id, UserStatus.WAITING.value, assigned_to=None)
 
         # Move user to the back of the queue (DB-based)
-        self.db.queue_remove(user_id)
+        self.db.queue_delete(user_id)
         self.db.queue_add(user_id, user.referral_link)
 
 
@@ -225,7 +225,7 @@ class QueueManager:
         if user_id not in queue_ids:
             return False, "User not in queue."
 
-        self.db.queue_remove(user_id)
+        self.db.queue_delete(user_id)
         self.db.remove_user(user_id)
 
 
