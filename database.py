@@ -356,7 +356,7 @@ class Database:
         return result is not None
 
     def queue_add(self, user_id: int, link: str):
-        with self._connect() as conn:
+        with self._get_connection() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO queue (user_id, referral_link)
                 VALUES (?, ?)
@@ -364,7 +364,7 @@ class Database:
 
 
     def queue_pop_first(self):
-        with self._connect() as conn:
+        with self._get_connection() as conn:
             row = conn.execute("""
                 SELECT user_id, referral_link FROM queue
                 ORDER BY timestamp ASC
@@ -381,7 +381,7 @@ class Database:
 
 
     def queue_get_all(self):
-        with self._connect() as conn:
+        with self._get_connection() as conn:
             rows = conn.execute("""
                 SELECT user_id, referral_link
                 FROM queue
