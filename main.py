@@ -380,3 +380,9 @@ def webhook():
 @app.get("/")
 def home():
     return "Bot running!"
+
+if __name__ == "__main__":
+    # Flask app direct starten met 0.0.0.0 en poort 10000 of os.getenv("PORT")
+    port = int(os.environ.get("PORT", 10000))
+    print(f"Starting Flask server on port {port}")
+    app.run(host="0.0.0.0", port=port)
