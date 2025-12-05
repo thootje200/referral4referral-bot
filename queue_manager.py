@@ -264,7 +264,6 @@ class QueueManager:
 
         success, referral_link, target_id = self.assign_referral(next_user)
         if success:
-            self._save_queue_to_db()
             return next_user, referral_link
         
         return None, None
